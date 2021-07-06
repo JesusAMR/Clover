@@ -26,7 +26,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
-import android.support.annotation.Nullable;
+
+import androidx.annotation.Nullable;
+
 import android.text.TextUtils;
 
 import com.android.volley.VolleyError;
@@ -42,6 +44,7 @@ import org.floens.chan.core.model.PostImage;
 import org.floens.chan.core.model.orm.Loadable;
 import org.floens.chan.core.model.orm.Pin;
 import org.floens.chan.core.pool.ChanLoaderFactory;
+import org.floens.chan.core.receiver.WatchUpdateReceiver;
 import org.floens.chan.core.settings.ChanSettings;
 import org.floens.chan.core.site.loader.ChanThreadLoader;
 import org.floens.chan.ui.helper.PostHelper;
@@ -108,8 +111,8 @@ public class WatchManager {
     private static final long FOREGROUND_INTERVAL = 15 * 1000;
     private static final int MESSAGE_UPDATE = 1;
     private static final int REQUEST_CODE_WATCH_UPDATE = 2;
-    private static final String WATCHER_UPDATE_ACTION = "org.floens.chan.intent.action.WATCHER_UPDATE";
-    private static final String WAKELOCK_TAG = "org.floens.chan:watch_manager_update_lock";
+    private static final String WATCHER_UPDATE_ACTION = getAppContext().getPackageName() + ".intent.action.WATCHER_UPDATE";
+    private static final String WAKELOCK_TAG = getAppContext().getPackageName() + ":watch_manager_update_lock";
     private static final long WAKELOCK_MAX_TIME = 60 * 1000;
     private static final long BACKGROUND_UPDATE_MIN_DELAY = 90 * 1000;
 
@@ -573,6 +576,7 @@ public class WatchManager {
     // and unschedules it when false
     private void scheduleAlarmManager(boolean enable) {
         Intent intent = new Intent(WATCHER_UPDATE_ACTION);
+        intent.setClass(getAppContext(), WatchUpdateReceiver.class);
         PendingIntent pendingIntent = PendingIntent.getBroadcast(getAppContext(), REQUEST_CODE_WATCH_UPDATE, intent, 0);
         if (enable) {
             int interval = getBackgroundIntervalSetting();
@@ -812,6 +816,16 @@ public class WatchManager {
         @Override
         public void onChanLoaderData(ChanThread thread) {
             pin.isError = false;
+
+            /*
+             * Forcibly update watched thread titles
+             * This solves the issue of when you post a thread and the site doesn't have the thread listed yet,
+             * resulting in the thread title being something like /test/918324919 instead of a proper title
+             *
+             * The thread title will be updated as soon as the site has the thread listed in the thread directory
+             *
+             */
+            pin.loadable.setTitle(PostHelper.getTitle(thread.op, pin.loadable));
 
             if (pin.thumbnailUrl == null && thread.op != null && thread.op.image() != null) {
                 pin.thumbnailUrl = thread.op.image().getThumbnailUrl().toString();

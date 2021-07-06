@@ -20,11 +20,14 @@ package org.floens.chan.ui.controller;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.drawable.Drawable;
-import android.support.design.widget.FloatingActionButton;
-import android.support.v4.graphics.drawable.DrawableCompat;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.widget.GridLayoutManager;
-import android.support.v7.widget.RecyclerView;
+
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
+
+import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.appcompat.app.AlertDialog;
+import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -46,6 +49,9 @@ import org.floens.chan.utils.RecyclerUtils;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.inject.Inject;
+
+import static org.floens.chan.Chan.inject;
 import static org.floens.chan.ui.theme.ThemeHelper.theme;
 import static org.floens.chan.utils.AndroidUtils.dp;
 
@@ -59,6 +65,8 @@ public class AlbumDownloadController extends Controller implements View.OnClickL
 
     private boolean allChecked = true;
     private AlbumAdapter adapter;
+
+    @Inject
     private ImageSaver imageSaver;
 
     public AlbumDownloadController(Context context) {
@@ -69,7 +77,7 @@ public class AlbumDownloadController extends Controller implements View.OnClickL
     public void onCreate() {
         super.onCreate();
 
-        imageSaver = ImageSaver.getInstance();
+        inject(this);
 
         view = inflateRes(R.layout.controller_album_download);
 
@@ -102,7 +110,7 @@ public class AlbumDownloadController extends Controller implements View.OnClickL
                         .setPositiveButton(R.string.ok, null)
                         .show();
             } else {
-                final String folderForAlbum = imageSaver.getSubFolder(loadable.title);
+                final String folderForAlbum = imageSaver.getSafeNameForFolder(loadable.title);
 
                 String message = context.getString(R.string.album_download_confirm,
                         context.getResources().getQuantityString(R.plurals.image, checkCount, checkCount),
@@ -117,13 +125,12 @@ public class AlbumDownloadController extends Controller implements View.OnClickL
                                 List<ImageSaveTask> tasks = new ArrayList<>(items.size());
                                 for (AlbumDownloadItem item : items) {
                                     if (item.checked) {
-                                        tasks.add(new ImageSaveTask(item.postImage));
+                                        tasks.add(ImageSaveTask.fromPostImage(item.postImage, false));
                                     }
                                 }
 
-                                if (imageSaver.startBundledTask(context, folderForAlbum, tasks)) {
-                                    navigationController.popController();
-                                }
+                                imageSaver.addTasks(tasks, folderForAlbum,
+                                        () -> navigationController.popController());
                             }
                         })
                         .show();

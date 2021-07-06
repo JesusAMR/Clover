@@ -20,6 +20,9 @@ package org.floens.chan.ui.view;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.PorterDuff;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.os.Build;
@@ -32,6 +35,10 @@ import android.widget.MediaController;
 import android.widget.Toast;
 import android.widget.VideoView;
 
+import androidx.lifecycle.Lifecycle;
+import androidx.lifecycle.LifecycleObserver;
+import androidx.lifecycle.OnLifecycleEvent;
+
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.ImageLoader;
 import com.android.volley.toolbox.ImageLoader.ImageContainer;
@@ -40,6 +47,7 @@ import com.google.android.exoplayer2.ExoPlayer;
 import com.google.android.exoplayer2.ExoPlayerFactory;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
+import com.google.android.exoplayer2.audio.AudioListener;
 import com.google.android.exoplayer2.source.ExtractorMediaSource;
 import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.ui.PlayerView;
@@ -55,6 +63,7 @@ import org.floens.chan.core.cache.FileCacheProvider;
 import org.floens.chan.core.di.UserAgentProvider;
 import org.floens.chan.core.model.PostImage;
 import org.floens.chan.core.settings.ChanSettings;
+import org.floens.chan.ui.activity.StartActivity;
 import org.floens.chan.utils.AndroidUtils;
 import org.floens.chan.utils.Logger;
 
@@ -68,12 +77,14 @@ import pl.droidsonroids.gif.GifImageView;
 
 import static org.floens.chan.Chan.inject;
 
-public class MultiImageView extends FrameLayout implements View.OnClickListener {
+public class MultiImageView extends FrameLayout implements View.OnClickListener, LifecycleObserver, AudioListener {
     public enum Mode {
-        UNLOADED, LOWRES, BIGIMAGE, GIF, MOVIE
+        UNLOADED, LOWRES, BIGIMAGE, GIF, MOVIE, OTHER
     }
 
     private static final String TAG = "MultiImageView";
+    //for checkstyle to not be dumb about local final vars
+    private static final int BACKGROUND_COLOR = Color.argb(255, 211, 217, 241);
 
     @Inject
     FileCache fileCache;
@@ -101,6 +112,8 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
     private boolean videoError = false;
     private MediaPlayer mediaPlayer;
     private SimpleExoPlayer exoPlayer;
+
+    private boolean backgroundToggle;
 
     public MultiImageView(Context context) {
         this(context, null);
@@ -134,7 +147,7 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
         return postImage;
     }
 
-    public void setMode(final Mode newMode) {
+    public void setMode(final Mode newMode, boolean center) {
         if (this.mode != newMode) {
 //            Logger.test("Changing mode from " + this.mode + " to " + newMode + " for " + postImage.thumbnailUrl);
             this.mode = newMode;
@@ -144,7 +157,7 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                 public boolean onMeasured(View view) {
                     switch (newMode) {
                         case LOWRES:
-                            setThumbnail(postImage.getThumbnailUrl().toString());
+                            setThumbnail(postImage.getThumbnailUrl().toString(), center);
                             break;
                         case BIGIMAGE:
                             setBigImage(postImage.imageUrl.toString());
@@ -154,6 +167,9 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                             break;
                         case MOVIE:
                             setVideo(postImage.imageUrl.toString());
+                            break;
+                        case OTHER:
+                            setOther(postImage.imageUrl.toString());
                             break;
                     }
                     return true;
@@ -180,6 +196,25 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
         return bigImage;
     }
 
+    public GifImageView findGifImageView() {
+        GifImageView gif = null;
+        for (int i = 0; i < getChildCount(); i++) {
+            if (getChildAt(i) instanceof GifImageView) {
+                gif = (GifImageView) getChildAt(i);
+            }
+        }
+        return gif;
+    }
+
+    @OnLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+    private void pauseVideo() {
+        if (exoPlayer != null) {
+            exoPlayer.setPlayWhenReady(false);
+        } else if (videoView != null) {
+            videoView.pause();
+        }
+    }
+
     public void setVolume(boolean muted) {
         final float volume = muted ? 0f : 1f;
         if (exoPlayer != null) {
@@ -198,12 +233,19 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        ((StartActivity) getContext()).getLifecycle().addObserver(this);
+    }
+
+    @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        ((StartActivity) getContext()).getLifecycle().removeObserver(this);
         cancelLoad();
     }
 
-    private void setThumbnail(String thumbnailUrl) {
+    private void setThumbnail(String thumbnailUrl, boolean center) {
         if (getWidth() == 0 || getHeight() == 0) {
             Logger.e(TAG, "getWidth() or getHeight() returned 0, not loading");
             return;
@@ -218,7 +260,9 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
             @Override
             public void onErrorResponse(VolleyError error) {
                 thumbnailRequest = null;
-                onError();
+                if (center) {
+                    onError(error);
+                }
             }
 
             @Override
@@ -268,7 +312,7 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                 if (notFound) {
                     onNotFoundError();
                 } else {
-                    onError();
+                    onError(new Exception());
                 }
             }
 
@@ -317,7 +361,7 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                 if (notFound) {
                     onNotFoundError();
                 } else {
-                    onError();
+                    onError(new Exception());
                 }
             }
 
@@ -348,7 +392,7 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
             }
         } catch (IOException e) {
             e.printStackTrace();
-            onError();
+            onError(new Exception());
             return;
         } catch (OutOfMemoryError e) {
             Runtime.getRuntime().gc();
@@ -386,7 +430,7 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                 if (notFound) {
                     onNotFoundError();
                 } else {
-                    onError();
+                    onError(new Exception());
                 }
             }
 
@@ -400,6 +444,10 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                 callback.showProgress(MultiImageView.this, false);
             }
         });
+    }
+
+    private void setOther(String fileUrl) {
+        Toast.makeText(getContext(), R.string.file_not_viewable, Toast.LENGTH_LONG).show();
     }
 
     private void setVideoFile(final File file) {
@@ -424,9 +472,12 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                     Player.REPEAT_MODE_ALL : Player.REPEAT_MODE_OFF);
 
             exoPlayer.prepare(videoSource);
-            callback.onVideoLoaded(this, hasMediaPlayerAudioTracks(exoPlayer));
+            exoPlayer.addAudioListener(this);
+
             addView(exoVideoView);
             exoPlayer.setPlayWhenReady(true);
+            onModeLoaded(Mode.MOVIE, exoVideoView);
+            callback.onVideoLoaded(this);
         } else {
             Context proxyContext = new NoMusicServiceCommandContext(getContext());
 
@@ -445,7 +496,10 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                 mp.setLooping(ChanSettings.videoAutoLoop.get());
                 mp.setVolume(0f, 0f);
                 onModeLoaded(Mode.MOVIE, videoView);
-                callback.onVideoLoaded(this, hasMediaPlayerAudioTracks(mp));
+                callback.onVideoLoaded(this);
+                if (hasMediaPlayerAudioTracks(mp)) {
+                    callback.onAudioLoaded(this);
+                }
             });
 
             videoView.setOnErrorListener((mp, what, extra) -> {
@@ -463,6 +517,15 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
                 onVideoError();
             }
         }
+    }
+
+    @Override
+    public void onAudioSessionId(int audioSessionId) {
+        if (exoPlayer.getAudioFormat() == null) {
+            return;
+        }
+
+        callback.onAudioLoaded(this);
     }
 
     private boolean hasMediaPlayerAudioTracks(MediaPlayer mediaPlayer) {
@@ -507,6 +570,20 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
         videoView.getPlayer().release();
     }
 
+    public void toggleTransparency() {
+        CustomScaleImageView imageView = findScaleImageView();
+        GifImageView gifView = findGifImageView();
+        if (imageView == null && gifView == null) return;
+        boolean isImage = imageView != null && gifView == null;
+        int backgroundColor = backgroundToggle ? Color.TRANSPARENT : BACKGROUND_COLOR;
+        if (isImage) {
+            imageView.setTileBackgroundColor(backgroundColor);
+        } else {
+            gifView.getDrawable().setColorFilter(backgroundColor, PorterDuff.Mode.DST_OVER);
+        }
+        backgroundToggle = !backgroundToggle;
+    }
+
     private void setBitImageFileInternal(File file, boolean tiling, final Mode forMode) {
         final CustomScaleImageView image = new CustomScaleImageView(getContext());
         image.setImage(ImageSource.uri(file.getAbsolutePath()).tiling(tiling));
@@ -528,8 +605,10 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
         });
     }
 
-    private void onError() {
-        Toast.makeText(getContext(), R.string.image_preview_failed, Toast.LENGTH_SHORT).show();
+    private void onError(Exception e) {
+        String message = getContext().getString(R.string.image_preview_failed);
+        String extra = e.getMessage() == null ? "" : ": " + e.getMessage();
+        Toast.makeText(getContext(), message + extra, Toast.LENGTH_SHORT).show();
         callback.showProgress(this, false);
     }
 
@@ -567,6 +646,11 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
             videoRequest.cancel();
             videoRequest = null;
         }
+        if (exoPlayer != null) {
+            // ExoPlayer will keep loading resources if we don't release it here.
+            exoPlayer.release();
+            exoPlayer = null;
+        }
     }
 
     private void onModeLoaded(Mode mode, View view) {
@@ -599,6 +683,21 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
         callback.onModeLoaded(this, mode);
     }
 
+    @Override
+    protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+        if (child instanceof GifImageView) {
+            GifImageView gif = (GifImageView) child;
+            if (gif.getDrawable() instanceof GifDrawable) {
+                GifDrawable drawable = (GifDrawable) gif.getDrawable();
+                if (drawable.getFrameByteCount() > 100 * 1024 * 1024) { //max size from RecordingCanvas
+                    onError(new Exception("Uncompressed GIF too large (>100MB)"));
+                    return false;
+                }
+            }
+        }
+        return super.drawChild(canvas, child, drawingTime);
+    }
+
     public interface Callback {
         void onTap(MultiImageView multiImageView);
 
@@ -608,9 +707,11 @@ public class MultiImageView extends FrameLayout implements View.OnClickListener 
 
         void onVideoError(MultiImageView multiImageView);
 
-        void onVideoLoaded(MultiImageView multiImageView, boolean hasAudio);
+        void onVideoLoaded(MultiImageView multiImageView);
 
         void onModeLoaded(MultiImageView multiImageView, Mode mode);
+
+        void onAudioLoaded(MultiImageView multiImageView);
     }
 
     public static class NoMusicServiceCommandContext extends ContextWrapper {

@@ -42,9 +42,13 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.preference.PreferenceManager;
-import android.support.customtabs.CustomTabsIntent;
-import android.support.design.widget.Snackbar;
-import android.support.v4.app.ActivityManagerCompat;
+
+import androidx.browser.customtabs.CustomTabsIntent;
+
+import com.google.android.material.snackbar.Snackbar;
+
+import androidx.core.app.ActivityManagerCompat;
+
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
@@ -54,6 +58,8 @@ import android.widget.Toast;
 
 import org.floens.chan.R;
 
+import java.text.CharacterIterator;
+import java.text.StringCharacterIterator;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -288,13 +294,20 @@ public class AndroidUtils {
         }
     }
 
-    public static String getReadableFileSize(long bytes, boolean si) {
-        long unit = si ? 1000 : 1024;
-        if (bytes < unit)
+    //https://programming.guide/java/formatting-byte-size-to-human-readable-format.html
+    public static String getReadableFileSize(long bytes) {
+        long absB = bytes == Long.MIN_VALUE ? Long.MAX_VALUE : Math.abs(bytes);
+        if (absB < 1024) {
             return bytes + " B";
-        int exp = (int) (Math.log(bytes) / Math.log(unit));
-        String pre = (si ? "kMGTPE" : "KMGTPE").charAt(exp - 1) + (si ? "" : "i");
-        return String.format(Locale.US, "%.1f %sB", bytes / Math.pow(unit, exp), pre);
+        }
+        long value = absB;
+        CharacterIterator ci = new StringCharacterIterator("KMGTPE");
+        for (int i = 40; i >= 0 && absB > 0xfffccccccccccccL >> i; i -= 10) {
+            value >>= 10;
+            ci.next();
+        }
+        value *= Long.signum(bytes);
+        return String.format(Locale.ENGLISH, "%.1f %ciB", value / 1024.0, ci.current());
     }
 
     public static CharSequence ellipsize(CharSequence text, int max) {

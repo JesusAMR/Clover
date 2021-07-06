@@ -98,6 +98,7 @@ Re-enable this permission in the app settings if you permanently disabled it."</
     <string name="action_open_browser">Open in a browser</string>
     <string name="action_share">Share</string>
     <string name="action_download_album">Download album</string>
+    <string name="action_transparency_toggle">Toggle opacity</string>
     <string name="action_search">Search</string>
     <string name="action_search_image">Image search</string>
     <string name="action_switch_catalog">Catalog mode</string>
@@ -136,6 +137,8 @@ Re-enable this permission in the app settings if you permanently disabled it."</
     <string name="image_not_found">Image not found</string>
     <string name="image_open_failed">Failed to open image</string>
     <string name="image_spoiler_filename">Spoiler image</string>
+
+    <string name="file_not_viewable">File not internally viewable; you can still download this file or open it in your browser.</string>
 
     <string name="thread_boards_search_hint">Search</string>
     <string name="thread_load_failed_ssl">HTTPS error</string>
@@ -445,7 +448,8 @@ Crash reports do not collect any personally identifiable information."
     <string name="setting_never_hide_toolbar">Never hide the toolbar</string>
     <string name="setting_enable_reply_fab">Enable the reply button</string>
     <string name="setting_enable_reply_fab_description">Disabling replaces the round button with a menu option</string>
-
+    <string name="setting_enable_accessible_post_info">Enable accessible post info</string>
+    <string name="setting_enable_accessible_post_info_description">Place post info in a more accessible location</string>
     <!-- Appearance post group -->
     <string name="settings_group_post">Post</string>
     <string name="setting_font_size">Font size</string>
@@ -503,8 +507,10 @@ Crash reports do not collect any personally identifiable information."
     <!-- Media general group -->
     <string name="settings_group_media">Media</string>
 
-    <string name="setting_save_board_folder">Save images in a board folder</string>
-    <string name="setting_save_board_folder_description">Create a folder for each board to store images in</string>
+    <string name="setting_save_board_folder">Save images in board folders</string>
+    <string name="setting_save_board_folder_description">Create a folder for each board when saving</string>
+    <string name="setting_save_thread_folder">Save images in thread folders</string>
+    <string name="setting_save_thread_folder_description">Create a folder for each thread when saving</string>
     <string name="setting_save_original_filename">Save original filename</string>
     <string name="setting_save_original_filename_description">
 "Save the image with the filename the site assigned.

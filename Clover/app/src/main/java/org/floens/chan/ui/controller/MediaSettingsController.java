@@ -17,9 +17,16 @@
  */
 package org.floens.chan.ui.controller;
 
+import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 
 import org.floens.chan.R;
+import org.floens.chan.core.presenter.StorageSetupPresenter;
 import org.floens.chan.core.settings.ChanSettings;
 import org.floens.chan.ui.settings.BooleanSettingView;
 import org.floens.chan.ui.settings.LinkSettingView;
@@ -31,12 +38,22 @@ import org.floens.chan.ui.settings.SettingsGroup;
 import java.util.ArrayList;
 import java.util.List;
 
-import de.greenrobot.event.EventBus;
+import javax.inject.Inject;
 
+import static org.floens.chan.Chan.inject;
+import static org.floens.chan.utils.AndroidUtils.dp;
 import static org.floens.chan.utils.AndroidUtils.getString;
 
-public class MediaSettingsController extends SettingsController {
+public class MediaSettingsController extends SettingsController implements
+        StorageSetupPresenter.Callback {
+    private static final int OPEN_TREE_INTENT_RESULT_ID = 101;
+
+    @Inject
+    private StorageSetupPresenter presenter;
+
     // Special setting views
+    private BooleanSettingView boardFolderSetting;
+    private BooleanSettingView threadFolderSetting;
     private LinkSettingView saveLocation;
     private ListSettingView<ChanSettings.MediaAutoLoadMode> imageAutoLoadView;
     private ListSettingView<ChanSettings.MediaAutoLoadMode> videoAutoLoadView;
@@ -49,7 +66,7 @@ public class MediaSettingsController extends SettingsController {
     public void onCreate() {
         super.onCreate();
 
-        EventBus.getDefault().register(this);
+        inject(this);
 
         navigation.setTitle(R.string.settings_screen_media);
 
@@ -60,13 +77,22 @@ public class MediaSettingsController extends SettingsController {
         buildPreferences();
 
         onPreferenceChange(imageAutoLoadView);
+
+        presenter.create(this);
+    }
+
+    private void requestTree() {
+//        Intent i = storage.getOpenTreeIntent();
+//        ((Activity) context).startActivityForResult(i, OPEN_TREE_INTENT_RESULT_ID);
+//        updateName();
     }
 
     @Override
-    public void onDestroy() {
-        super.onDestroy();
-
-        EventBus.getDefault().unregister(this);
+    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
+        if (requestCode == OPEN_TREE_INTENT_RESULT_ID && resultCode == Activity.RESULT_OK) {
+//            storage.handleOpenTreeIntent(intent);
+//            updateName();
+        }
     }
 
     @Override
@@ -78,10 +104,29 @@ public class MediaSettingsController extends SettingsController {
         }
     }
 
-    public void onEvent(ChanSettings.SettingChanged setting) {
-        if (setting.setting == ChanSettings.saveLocation) {
-            updateSaveLocationSetting();
-        }
+    @Override
+    public void setSaveLocationDescription(String description) {
+        saveLocation.setDescription(description);
+    }
+
+    @Override
+    public void showPathDialog(String path) {
+        FrameLayout container = new FrameLayout(context);
+        EditText dialogView = new EditText(context);
+        dialogView.setText(path);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT
+        );
+        lp.leftMargin = lp.rightMargin = dp(20);
+        container.addView(dialogView, lp);
+        new AlertDialog.Builder(context)
+                .setTitle(R.string.save_location_screen)
+                .setView(container)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.ok, (dialog, which) -> {
+                    presenter.saveLocationEntered(dialogView.getText().toString());
+                })
+                .show();
     }
 
     private void populatePreferences() {
@@ -90,11 +135,6 @@ public class MediaSettingsController extends SettingsController {
             SettingsGroup media = new SettingsGroup(R.string.settings_group_media);
 
             setupSaveLocationSetting(media);
-
-            media.add(new BooleanSettingView(this,
-                    ChanSettings.saveBoardFolder,
-                    R.string.setting_save_board_folder,
-                    R.string.setting_save_board_folder_description));
 
             media.add(new BooleanSettingView(this,
                     ChanSettings.saveOriginalFilename,
@@ -137,9 +177,9 @@ public class MediaSettingsController extends SettingsController {
             setupMediaLoadTypesSetting(loading);
 
             loading.add(new BooleanSettingView(this,
-                ChanSettings.videoAutoLoop,
-                R.string.setting_video_auto_loop,
-                R.string.setting_video_auto_loop_description));
+                    ChanSettings.videoAutoLoop,
+                    R.string.setting_video_auto_loop,
+                    R.string.setting_video_auto_loop_description));
 
             groups.add(loading);
         }
@@ -205,13 +245,19 @@ public class MediaSettingsController extends SettingsController {
     }
 
     private void setupSaveLocationSetting(SettingsGroup media) {
+        // Register a normal click listener and a long click listener that sets the
+        // force file option to true.
         saveLocation = (LinkSettingView) media.add(new LinkSettingView(this,
                 R.string.save_location_screen, 0,
-                v -> navigationController.pushController(new SaveLocationController(context))));
-        updateSaveLocationSetting();
-    }
-
-    private void updateSaveLocationSetting() {
-        saveLocation.setDescription(ChanSettings.saveLocation.get());
+                v -> presenter.saveLocationClicked(false)) {
+            @Override
+            public void setView(View view) {
+                super.setView(view);
+                view.setOnLongClickListener(v -> {
+                    presenter.saveLocationClicked(true);
+                    return true;
+                });
+            }
+        });
     }
 }

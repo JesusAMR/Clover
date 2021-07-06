@@ -25,9 +25,11 @@ import android.nfc.NdefMessage;
 import android.nfc.NfcAdapter;
 import android.nfc.NfcEvent;
 import android.os.Bundle;
-import android.support.annotation.NonNull;
-import android.support.v7.app.AlertDialog;
-import android.support.v7.app.AppCompatActivity;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+
 import android.util.Pair;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -54,8 +56,6 @@ import org.floens.chan.ui.controller.SplitNavigationController;
 import org.floens.chan.ui.controller.StyledToolbarNavigationController;
 import org.floens.chan.ui.controller.ThreadSlideController;
 import org.floens.chan.ui.controller.ViewThreadController;
-import org.floens.chan.ui.helper.ImagePickDelegate;
-import org.floens.chan.ui.helper.RuntimePermissionsHelper;
 import org.floens.chan.ui.helper.VersionHandler;
 import org.floens.chan.ui.state.ChanState;
 import org.floens.chan.ui.theme.ThemeHelper;
@@ -70,7 +70,9 @@ import javax.inject.Inject;
 
 import static org.floens.chan.Chan.inject;
 
-public class StartActivity extends AppCompatActivity implements NfcAdapter.CreateNdefMessageCallback {
+public class StartActivity extends AppCompatActivity implements
+        NfcAdapter.CreateNdefMessageCallback,
+        ActivityResultHelper.ActivityResultStarter {
     private static final String TAG = "StartActivity";
 
     private static final String STATE_KEY = "chan_state";
@@ -84,6 +86,7 @@ public class StartActivity extends AppCompatActivity implements NfcAdapter.Creat
 
     private ImagePickDelegate imagePickDelegate;
     private RuntimePermissionsHelper runtimePermissionsHelper;
+    private ActivityResultHelper.ActivityStarterHelper resultHelper;
     private VersionHandler versionHandler;
 
     private boolean intentMismatchWorkaroundActive = false;
@@ -115,6 +118,7 @@ public class StartActivity extends AppCompatActivity implements NfcAdapter.Creat
 
         imagePickDelegate = new ImagePickDelegate(this);
         runtimePermissionsHelper = new RuntimePermissionsHelper(this);
+        resultHelper = new ActivityResultHelper.ActivityStarterHelper();
         versionHandler = new VersionHandler(this, runtimePermissionsHelper);
 
         contentView = findViewById(android.R.id.content);
@@ -141,6 +145,32 @@ public class StartActivity extends AppCompatActivity implements NfcAdapter.Creat
         setupFromStateOrFreshLaunch(savedInstanceState);
 
         versionHandler.run();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        if (intentMismatchWorkaround()) {
+            return;
+        }
+
+        // TODO: clear whole stack?
+        stackTop().onHide();
+        stackTop().onDestroy();
+        stack.clear();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        resultHelper.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        resultHelper.onPause();
     }
 
     private void setupFromStateOrFreshLaunch(Bundle savedInstanceState) {
@@ -469,24 +499,27 @@ public class StartActivity extends AppCompatActivity implements NfcAdapter.Creat
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
+    public void startActivityForResultWithCallback(
+            Intent intent, int requestCode, ActivityResultHelper.ActivityResultCallback callback) {
+        resultHelper.startActivityForResult(this, intent, requestCode, callback);
+    }
 
-        if (intentMismatchWorkaround()) {
-            return;
-        }
-
-        // TODO: clear whole stack?
-        stackTop().onHide();
-        stackTop().onDestroy();
-        stack.clear();
+    @Override
+    public boolean isActivityResumed() {
+        return resultHelper.isActivityResumed();
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
+        resultHelper.onActivityResult(requestCode, resultCode, data);
+
+        // TODO: move to resultHelper.
         imagePickDelegate.onActivityResult(requestCode, resultCode, data);
+
+        // Go through the controller stack.
+        drawerController.onActivityResult(requestCode, resultCode, data);
     }
 
     private Controller stackTop() {

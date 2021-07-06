@@ -31,7 +31,6 @@ import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.os.Build;
-import android.support.v7.app.AlertDialog;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -49,8 +48,6 @@ import org.floens.chan.R;
 import org.floens.chan.controller.Controller;
 import org.floens.chan.core.model.PostImage;
 import org.floens.chan.core.presenter.ImageViewerPresenter;
-import org.floens.chan.core.saver.ImageSaveTask;
-import org.floens.chan.core.saver.ImageSaver;
 import org.floens.chan.core.settings.ChanSettings;
 import org.floens.chan.core.site.ImageSearch;
 import org.floens.chan.ui.adapter.ImageViewerAdapter;
@@ -70,12 +67,12 @@ import org.floens.chan.ui.view.TransitionImageView;
 import org.floens.chan.utils.AndroidUtils;
 import org.floens.chan.utils.Logger;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.inject.Inject;
 
+import androidx.appcompat.app.AlertDialog;
 import okhttp3.HttpUrl;
 
 import static org.floens.chan.Chan.inject;
@@ -134,6 +131,7 @@ public class ImageViewerController extends Controller implements ImageViewerPres
         overflowBuilder.withSubItem(R.string.action_share, this::shareClicked);
         overflowBuilder.withSubItem(R.string.action_search_image, this::searchClicked);
         overflowBuilder.withSubItem(R.string.action_download_album, this::downloadAlbumClicked);
+        overflowBuilder.withSubItem(R.string.action_transparency_toggle, this::toggleTransparency);
 
         overflowBuilder.build().build();
 
@@ -180,7 +178,7 @@ public class ImageViewerController extends Controller implements ImageViewerPres
     }
 
     private void saveClicked(ToolbarMenuItem item) {
-        saveShare(false, presenter.getCurrentPostImage());
+        presenter.saveClicked(presenter.getCurrentPostImage());
     }
 
     private void openBrowserClicked(ToolbarMenuSubItem item) {
@@ -193,8 +191,7 @@ public class ImageViewerController extends Controller implements ImageViewerPres
     }
 
     private void shareClicked(ToolbarMenuSubItem item) {
-        PostImage postImage = presenter.getCurrentPostImage();
-        saveShare(true, postImage);
+        presenter.shareClicked(presenter.getCurrentPostImage());
     }
 
     private void searchClicked(ToolbarMenuSubItem item) {
@@ -208,6 +205,10 @@ public class ImageViewerController extends Controller implements ImageViewerPres
         navigationController.pushController(albumDownloadController);
     }
 
+    private void toggleTransparency(ToolbarMenuSubItem item) {
+        ((ImageViewerAdapter) pager.getAdapter()).toggleTransparency(presenter.getCurrentPostImage());
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
@@ -215,23 +216,9 @@ public class ImageViewerController extends Controller implements ImageViewerPres
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
-    private void saveShare(boolean share, PostImage postImage) {
-        if (share && ChanSettings.shareUrl.get()) {
-            AndroidUtils.shareLink(postImage.imageUrl.toString());
-        } else {
-            ImageSaveTask task = new ImageSaveTask(postImage);
-            task.setShare(share);
-            if (ChanSettings.saveBoardFolder.get()) {
-                task.setSubFolder(presenter.getLoadable().site.name() +
-                        File.separator +
-                        presenter.getLoadable().boardCode);
-            }
-            ImageSaver.getInstance().startDownloadTask(context, task);
-        }
-    }
-
     @Override
     public boolean onBack() {
+        if (presenter.isTransitioning()) return false;
         presenter.onExit();
         return true;
     }
@@ -263,8 +250,8 @@ public class ImageViewerController extends Controller implements ImageViewerPres
         pager.setCurrentItem(initialIndex);
     }
 
-    public void setImageMode(PostImage postImage, MultiImageView.Mode mode) {
-        ((ImageViewerAdapter) pager.getAdapter()).setMode(postImage, mode);
+    public void setImageMode(PostImage postImage, MultiImageView.Mode mode, boolean center) {
+        ((ImageViewerAdapter) pager.getAdapter()).setMode(postImage, mode, center);
     }
 
     @Override

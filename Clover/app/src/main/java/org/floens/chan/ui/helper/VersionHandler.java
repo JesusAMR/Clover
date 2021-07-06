@@ -22,7 +22,9 @@ import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.support.v7.app.AlertDialog;
+
+import androidx.appcompat.app.AlertDialog;
+
 import android.text.Html;
 import android.text.Spanned;
 import android.text.method.LinkMovementMethod;
@@ -34,6 +36,7 @@ import org.floens.chan.R;
 import org.floens.chan.core.net.UpdateApiRequest;
 import org.floens.chan.core.settings.ChanSettings;
 import org.floens.chan.core.update.UpdateManager;
+import org.floens.chan.ui.activity.RuntimePermissionsHelper;
 import org.floens.chan.utils.AndroidUtils;
 import org.floens.chan.utils.Logger;
 

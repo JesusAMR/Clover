@@ -18,15 +18,19 @@
 package org.floens.chan.core.presenter;
 
 import android.net.ConnectivityManager;
-import android.support.v4.view.ViewPager;
+
+import androidx.viewpager.widget.ViewPager;
 
 import org.floens.chan.core.cache.FileCache;
 import org.floens.chan.core.cache.FileCacheDownloader;
 import org.floens.chan.core.cache.FileCacheListener;
 import org.floens.chan.core.model.PostImage;
 import org.floens.chan.core.model.orm.Loadable;
+import org.floens.chan.core.saver.ImageSaveTask;
+import org.floens.chan.core.saver.ImageSaver;
 import org.floens.chan.core.settings.ChanSettings;
 import org.floens.chan.ui.view.MultiImageView;
+import org.floens.chan.utils.AndroidUtils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -45,6 +49,9 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
 
     @Inject
     FileCache fileCache;
+
+    @Inject
+    ImageSaver imageSaver;
 
     private boolean entering = true;
     private boolean exiting = false;
@@ -80,7 +87,7 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
 
         // Do this before the view is measured, to avoid it to always loading the first two pages
         callback.setPagerItems(images, selectedPosition);
-        callback.setImageMode(images.get(selectedPosition), MultiImageView.Mode.LOWRES);
+        callback.setImageMode(images.get(selectedPosition), MultiImageView.Mode.LOWRES, true);
     }
 
     public void onViewMeasured() {
@@ -88,6 +95,10 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
         callback.startPreviewInTransition(images.get(selectedPosition));
         PostImage postImage = images.get(selectedPosition);
         callback.setTitle(postImage, selectedPosition, images.size(), postImage.spoiler);
+    }
+
+    public boolean isTransitioning() {
+        return entering;
     }
 
     public void onInTransitionEnd() {
@@ -106,7 +117,7 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
         PostImage postImage = images.get(selectedPosition);
         if (postImage.type == PostImage.Type.MOVIE) {
             // VideoView doesn't work with invisible visibility
-            callback.setImageMode(postImage, MultiImageView.Mode.LOWRES);
+            callback.setImageMode(postImage, MultiImageView.Mode.LOWRES, true);
         }
 
         callback.setPagerVisiblity(false);
@@ -172,8 +183,8 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
                     changeViewsOnInTransitionEnd = true;
                 }
                 // Transition ended or not, request loading the other side views to lowres
-                for (PostImage other : getOther(selectedPosition, false)) {
-                    callback.setImageMode(other, MultiImageView.Mode.LOWRES);
+                for (PostImage other : getOther(selectedPosition)) {
+                    callback.setImageMode(other, MultiImageView.Mode.LOWRES, false);
                 }
                 onLowResInCenter();
             } else {
@@ -197,8 +208,8 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
         setTitle(postImage, position);
         callback.scrollToImage(postImage);
 
-        for (PostImage other : getOther(position, false)) {
-            callback.setImageMode(other, MultiImageView.Mode.LOWRES);
+        for (PostImage other : getOther(position)) {
+            callback.setImageMode(other, MultiImageView.Mode.LOWRES, false);
         }
 
         // Already in LOWRES mode
@@ -218,11 +229,13 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
 
         if (imageAutoLoad(postImage) && !postImage.spoiler) {
             if (postImage.type == PostImage.Type.STATIC) {
-                callback.setImageMode(postImage, MultiImageView.Mode.BIGIMAGE);
+                callback.setImageMode(postImage, MultiImageView.Mode.BIGIMAGE, true);
             } else if (postImage.type == PostImage.Type.GIF) {
-                callback.setImageMode(postImage, MultiImageView.Mode.GIF);
+                callback.setImageMode(postImage, MultiImageView.Mode.GIF, true);
             } else if (postImage.type == PostImage.Type.MOVIE && videoAutoLoad(postImage)) {
-                callback.setImageMode(postImage, MultiImageView.Mode.MOVIE);
+                callback.setImageMode(postImage, MultiImageView.Mode.MOVIE, true);
+            } else if (postImage.type == PostImage.Type.SWF) {
+                callback.setImageMode(postImage, MultiImageView.Mode.OTHER, true);
             }
         }
 
@@ -282,18 +295,20 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
             PostImage postImage = images.get(selectedPosition);
             if (imageAutoLoad(postImage) && !postImage.spoiler) {
                 if (postImage.type == PostImage.Type.MOVIE) {
-                    callback.setImageMode(postImage, MultiImageView.Mode.MOVIE);
+                    callback.setImageMode(postImage, MultiImageView.Mode.MOVIE, true);
                 } else {
                     onExit();
                 }
             } else {
                 MultiImageView.Mode currentMode = callback.getImageMode(postImage);
                 if (postImage.type == PostImage.Type.STATIC && currentMode != MultiImageView.Mode.BIGIMAGE) {
-                    callback.setImageMode(postImage, MultiImageView.Mode.BIGIMAGE);
+                    callback.setImageMode(postImage, MultiImageView.Mode.BIGIMAGE, true);
                 } else if (postImage.type == PostImage.Type.GIF && currentMode != MultiImageView.Mode.GIF) {
-                    callback.setImageMode(postImage, MultiImageView.Mode.GIF);
+                    callback.setImageMode(postImage, MultiImageView.Mode.GIF, true);
                 } else if (postImage.type == PostImage.Type.MOVIE && currentMode != MultiImageView.Mode.MOVIE) {
-                    callback.setImageMode(postImage, MultiImageView.Mode.MOVIE);
+                    callback.setImageMode(postImage, MultiImageView.Mode.MOVIE, true);
+                } else if (postImage.type == PostImage.Type.SWF && currentMode != MultiImageView.Mode.OTHER) {
+                    callback.setImageMode(postImage, MultiImageView.Mode.OTHER, true);
                 } else {
                     onExit();
                 }
@@ -340,13 +355,16 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
     }
 
     @Override
-    public void onVideoLoaded(MultiImageView multiImageView, boolean hasAudio) {
+    public void onVideoLoaded(MultiImageView multiImageView) {
+        callback.showVolumeMenuItem(false, muted);
+    }
+
+    @Override
+    public void onAudioLoaded(MultiImageView multiImageView) {
         PostImage currentPostImage = getCurrentPostImage();
         if (multiImageView.getPostImage() == currentPostImage) {
-            if (hasAudio) {
-                callback.showVolumeMenuItem(true, muted);
-                callback.setVolume(currentPostImage, muted);
-            }
+            callback.showVolumeMenuItem(true, muted);
+            callback.setVolume(currentPostImage, muted);
         }
     }
 
@@ -379,18 +397,27 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
                 postImage.spoiler && callback.getImageMode(postImage) == MultiImageView.Mode.LOWRES);
     }
 
-    private List<PostImage> getOther(int position, boolean all) {
-        List<PostImage> other = new ArrayList<>(3);
+    private List<PostImage> getOther(int position) {
+        List<PostImage> other = new ArrayList<>(2);
         if (position - 1 >= 0) {
             other.add(images.get(position - 1));
-        }
-        if (all) {
-            other.add(images.get(position));
         }
         if (position + 1 < images.size()) {
             other.add(images.get(position + 1));
         }
         return other;
+    }
+
+    public void saveClicked(PostImage postImage) {
+        imageSaver.addTask(ImageSaveTask.fromPostImage(postImage, false));
+    }
+
+    public void shareClicked(PostImage postImage) {
+        if (ChanSettings.shareUrl.get()) {
+            AndroidUtils.shareLink(postImage.imageUrl.toString());
+        } else {
+            imageSaver.share(postImage);
+        }
     }
 
     public interface Callback {
@@ -404,7 +431,7 @@ public class ImageViewerPresenter implements MultiImageView.Callback, ViewPager.
 
         void setPagerItems(List<PostImage> images, int initialIndex);
 
-        void setImageMode(PostImage postImage, MultiImageView.Mode mode);
+        void setImageMode(PostImage postImage, MultiImageView.Mode mode, boolean center);
 
         void setVolume(PostImage postImage, boolean muted);
 

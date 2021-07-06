@@ -18,7 +18,7 @@
 package org.floens.chan.core.site;
 
 
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 
 import org.floens.chan.core.database.LoadableProvider;
 import org.floens.chan.core.model.orm.Loadable;
@@ -116,6 +116,7 @@ public class SiteResolver {
                     Loadable resolved = loadableProvider.get(resolvedLoadable);
 
                     if (resolved != null) {
+                        resolved.markedNo = resolvedLoadable.markedNo;
                         return new LoadableResult(resolved);
                     }
                 }

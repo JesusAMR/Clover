@@ -23,7 +23,7 @@ import okhttp3.HttpUrl;
 
 public class PostImage {
     public enum Type {
-        STATIC, GIF, MOVIE
+        STATIC, GIF, MOVIE, SWF
     }
 
     public final String originalName;
@@ -57,7 +57,14 @@ public class PostImage {
                 break;
             case "webm":
             case "mp4":
+            case "mp3":
+            case "m4a":
+            case "ogg":
+            case "flac":
                 type = Type.MOVIE;
+                break;
+            case "swf":
+                type = Type.SWF;
                 break;
             default:
                 type = Type.STATIC;
@@ -118,6 +125,7 @@ public class PostImage {
         }
 
         public Builder extension(String extension) {
+            if (extension.equals("jpeg")) extension = "jpg";
             this.extension = extension;
             return this;
         }

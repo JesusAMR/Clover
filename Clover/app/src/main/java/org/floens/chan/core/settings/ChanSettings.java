@@ -17,7 +17,6 @@
  */
 package org.floens.chan.core.settings;
 
-import android.os.Environment;
 import android.text.TextUtils;
 
 import org.floens.chan.BuildConfig;
@@ -27,7 +26,6 @@ import org.floens.chan.core.update.UpdateManager;
 import org.floens.chan.ui.adapter.PostsFilter;
 import org.floens.chan.utils.AndroidUtils;
 
-import java.io.File;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 
@@ -118,9 +116,11 @@ public class ChanSettings {
     public static final BooleanSetting developer;
 
     public static final StringSetting saveLocation;
+    public static final StringSetting saveLocationTreeUri;
     public static final BooleanSetting saveOriginalFilename;
     public static final BooleanSetting shareUrl;
     public static final BooleanSetting enableReplyFab;
+    public static final BooleanSetting accessibleInfo;
     public static final BooleanSetting anonymize;
     public static final BooleanSetting anonymizeIds;
     public static final BooleanSetting showAnonymousName;
@@ -135,7 +135,7 @@ public class ChanSettings {
     public static final BooleanSetting postFilename;
     public static final BooleanSetting neverHideToolbar;
     public static final BooleanSetting controllerSwipeable;
-    public static final BooleanSetting saveBoardFolder;
+
     public static final BooleanSetting videoDefaultMuted;
     public static final BooleanSetting videoAutoLoop;
 
@@ -198,11 +198,11 @@ public class ChanSettings {
 
         developer = new BooleanSetting(p, "preference_developer", false);
 
-        saveLocation = new StringSetting(p, "preference_image_save_location", Environment.getExternalStorageDirectory() + File.separator + "Clover");
-        saveLocation.addCallback((setting, value) ->
-                EventBus.getDefault().post(new SettingChanged<>(saveLocation)));
+        saveLocation = new StringSetting(p, "preference_image_save_location", "");
+        saveLocationTreeUri = new StringSetting(p, "preference_image_save_tree_uri", "");
         saveOriginalFilename = new BooleanSetting(p, "preference_image_save_original", false);
         shareUrl = new BooleanSetting(p, "preference_image_share_url", false);
+        accessibleInfo = new BooleanSetting(p, "preference_enable_accessible_info", false);
         enableReplyFab = new BooleanSetting(p, "preference_enable_reply_fab", true);
         anonymize = new BooleanSetting(p, "preference_anonymize", false);
         anonymizeIds = new BooleanSetting(p, "preference_anonymize_ids", false);
@@ -218,7 +218,7 @@ public class ChanSettings {
         postFilename = new BooleanSetting(p, "preference_post_filename", true);
         neverHideToolbar = new BooleanSetting(p, "preference_never_hide_toolbar", false);
         controllerSwipeable = new BooleanSetting(p, "preference_controller_swipeable", true);
-        saveBoardFolder = new BooleanSetting(p, "preference_save_subboard", false);
+//        saveBoardFolder = new BooleanSetting(p, "preference_save_subboard", false);
         videoDefaultMuted = new BooleanSetting(p, "preference_video_default_muted", true);
         videoAutoLoop = new BooleanSetting(p, "preference_video_loop", true);
 
